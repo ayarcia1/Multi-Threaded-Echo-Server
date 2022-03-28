@@ -1,2 +1,2 @@
-echo: echo.c
-	gcc -o echo echo.c -lpthread -Wall -Werror
+echo: server.c client.c
+	gcc -o echo server.c client.c -lpthread -Wall -Werror
