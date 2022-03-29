@@ -1,22 +1,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <pthread.h>
+#include <sys/types.h>
 #include <sys/socket.h>
-void echo(int connfd);
-void *thread(void *vargp);
-
+#include <netinet/in.h>
 #define DEFAULT_LENGTH 1024
-#define DEFAULT_PORT 256
+#define DEFAULT_PORT 8888
 #define BUFFER_SIZE 1024
 #define NUM_WORKER 10
 #define EXIT_CHAR "x"
 #define SA struct sockaddr
+void *echo_thread(void *vargp);
 
 int main(int argc, char **argv){
-    int i, length, port, listenfd, *connfd;
-    socklen_t clientlen = sizeof(struct sockaddr_in);
-    struct sockaddr_in clientaddr;
+    int i, length, port;
+    int socket_desc, new_socket;
+    int n = sizeof(struct sockaddr_in);
+    struct sockaddr_in server, client;
     pthread_t tid, wthread[NUM_WORKER];
 
     if(argc == 1){
@@ -27,7 +29,7 @@ int main(int argc, char **argv){
     else if(argc == 2){
         length = atoi(argv[1]);
         port = DEFAULT_PORT;
-        if(length < 512 || length > 2048){
+        if(length < 128 || length > 2048){
             printf("echo: insufficient length value.\n");
             exit(1);
         }
@@ -37,12 +39,12 @@ int main(int argc, char **argv){
         length = atoi(argv[1]);
         port = atoi(argv[2]);
 
-        if(length < 512 || length > 2048){
+        if(length < 128 || length > 2048){
             printf("echo: insufficient length value.\n");
             exit(1);
         }
         
-        if(port < 128 || port > 512){
+        if(port < 1024 || port > 9999){
             printf("echo: insufficient port value.\n");
             exit(1);
         }
@@ -53,32 +55,54 @@ int main(int argc, char **argv){
         exit(1);
     }
 
+    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
+    if(socket_desc == -1){
+        printf("echo: could not create a socket\n");
+    }
+
+    server.sin_family = AF_INET;
+    server.sin_addr.s_addr = INADDR_ANY;
+    server.sin_port = htons(DEFAULT_PORT);
+
+    if(bind(socket_desc, (SA*) &server, sizeof(server)) == -1){
+        printf("echo: bind failed\n");
+        exit(1);
+    }
+    printf("echo: bind complete\n");
+
+    listen(socket_desc, 3);
+    printf("echo: waiting for incoming connections\n");
+    
     for(i=0; i<NUM_WORKER; i++){
-        pthread_create(&wthread[i], NULL, thread, NULL);
-        if(pthread_create(&wthread[i], NULL, thread, NULL) == -1){
+        if(pthread_create(&wthread[i], NULL, echo_thread, NULL) == -1){
             printf("echo: failed to open thread\n");
             exit(1);
         }
     }
 
     while(1){
-        connfd = malloc(sizeof(int));
-        *connfd = accept(listenfd, (SA*) &clientaddr, &clientlen);
-        pthread_create(&tid, NULL, thread, connfd);
+        new_socket = accept(socket_desc, (SA*) &client, (socklen_t*) &n);
+        if(new_socket == -1){
+            printf("echo: accept failed\n");
+            exit(1);
+        }
+        printf("echo: connection accepted\n");
+
+        pthread_create(&tid, NULL, echo_thread, &new_socket);
+
+        for(i=0; i < NUM_WORKER; i++){
+            if(pthread_join(wthread[i], NULL) == -1){
+                printf("echo: failed to join thread\n");
+                exit(1);
+            }
+        }
     }
     return 0;
 }
 
-void echo(int connfd){
-    size_t n;
-    char buf[BUFFER_SIZE];
-
-}
-
-void *thread(void *vargp){
+void *echo_thread(void *vargp){
     int connfd = *((int*)vargp);
     pthread_detach(pthread_self());
     free(vargp);
-    echo(connfd);
     return NULL;
 }
