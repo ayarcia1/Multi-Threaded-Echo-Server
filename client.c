@@ -9,38 +9,38 @@
 #define SA struct sockaddr
 
 int main(int argc, char **argv){
-    int socket_desc;
+    int server_socket;
     struct sockaddr_in server;
-    char *message = "\0", server_reply[1024];
+    char *client_message = '\0', server_message[1024];
 
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-    if(socket_desc == -1){
-        printf("echo: could not create a socket\n");
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if(server_socket == -1){
+        printf("client: could not create a socket\n");
     }
 
     server.sin_family = AF_INET;
-    server.sin_addr.s_addr = inet_addr("74.125.235.20");
-    server.sin_port = htons(80);
+    server.sin_addr.s_addr = inet_addr("192.168.239.5");
+    server.sin_port = htons(8080);
 
-    if(connect(socket_desc, (SA*) &server, sizeof(server)) == -1){
-        printf("echo: connect failed\n");
+    if(connect(server_socket, (SA*) &server, sizeof(server)) == -1){
+        printf("client: connect failed.\n");
         exit(1);
     }
-    printf("echo: connected\n");
-    printf("echo: enter a message to echo server: ");
-    scanf("%s", message);
+    printf("client: connected.\n");
+    printf("client: enter a message to server: ");
+    scanf("%s", client_message);
 
-    if(send(socket_desc, message, strlen(message), 0) == -1){
-        printf("echo: send failed\n");
+    if(send(server_socket, client_message, strlen(client_message), 0) == -1){
+        printf("client: send failed.\n");
         exit(1);
     }
-    printf("echo: data sent\n");
+    printf("client: data sent.\n");
     
-    if(recv(socket_desc, server_reply, sizeof(server_reply), 0) == -1){
-        printf("echo: recv failed\n");
+    if(recv(server_socket, server_message, sizeof(server_message), 0) == -1){
+        printf("client: recv failed.\n");
     }
 
-    printf("echo: reply received\n");
-    puts(server_reply);
+    printf("client: reply received.\n");
+    puts(server_message);
     return 0;
 }
