@@ -7,20 +7,21 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #define DEFAULT_LENGTH 1024
-#define DEFAULT_PORT 8080
+#define DEFAULT_PORT 8888
 #define BUFFER_SIZE 1024
 #define NUM_WORKER 10
 #define EXIT_CHAR "x"
 #define SA struct sockaddr
-void *echo_thread(void *vargp);
-void *log_thread(void *vargp);
+void *main_thread(void *args);
+void *worker_thread(void *args);
+void *log_thread(void *args);
 
 int main(int argc, char **argv){
     int i, length, port;
     int server_socket, client_socket;
     int size = sizeof(struct sockaddr_in);
     struct sockaddr_in server, client;
-    pthread_t tid, log, wthread[NUM_WORKER];
+    pthread_t log, thread[NUM_WORKER];
 
     if(argc == 1){
         length = DEFAULT_LENGTH;
@@ -56,6 +57,8 @@ int main(int argc, char **argv){
         exit(1);
     }
 
+    pthread_create(&log, NULL, log_thread, NULL);
+
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket == -1){
         printf("server: could not create a socket.\n");
@@ -74,38 +77,26 @@ int main(int argc, char **argv){
     printf("server: bind complete.\n");
     sleep(1);
 
-    if(listen(server_socket, 3) == -1){
-        printf("server: listen failed.\n");
-        exit(1);
-    }
+    if(listen(server_socket, 3));
     printf("server: waiting for incoming connections.\n");
-    sleep(1);
-
-    pthread_create(&log, NULL, log_thread, &client_socket);
-    
-    for(i=0; i<NUM_WORKER; i++){
-        if(pthread_create(&wthread[i], NULL, echo_thread, NULL) == -1){
-            printf("server: failed to open thread.\n");
-            exit(1);
-        }
-    }
 
     while(1){
-        printf("server: listening...");
-        sleep(1);
-
         client_socket = accept(server_socket, (SA*) &client, (socklen_t*) &size);
         if(client_socket == -1){
             printf("server: accept failed.\n");
             exit(1);
         }
         printf("server: connection accepted.\n");
-        sleep(1);
 
-        pthread_create(&tid, NULL, echo_thread, &client_socket);
+        for(i=0; i<NUM_WORKER; i++){
+            if(pthread_create(&thread[i], NULL, worker_thread, &client_socket) == -1){
+                printf("server: failed to open thread.\n");
+                exit(1);
+            }
+        }
 
-        for(i=0; i < NUM_WORKER; i++){
-            if(pthread_join(wthread[i], NULL) == -1){
+        for(i=0; i<NUM_WORKER; i++){
+            if(pthread_join(thread[i], NULL) == -1){
                 printf("server: failed to join thread.\n");
                 exit(1);
             }
@@ -114,23 +105,30 @@ int main(int argc, char **argv){
     return 0;
 }
 
-void *echo_thread(void *vargp){
-    int connect_socket = *((int*)vargp);
-    int recieve;
-	char message[BUFFER_SIZE];
-
-	while((recieve = recv(connect_socket, message, BUFFER_SIZE, 0)) != -1){
-		message[recieve] = '\0';
-		if(strcmp(message, EXIT_CHAR) == 0){
-            break;
-        }
-		send(connect_socket, message, strlen(message), 0);	
-	}
-    free(vargp);
+void *main_thread(void *args){
     return NULL;
 }
 
-void *log_thread(void *vargp){
+void *worker_thread(void *args){
+    int client_socket = *((int*)args);
+    int recieve;
+    char client_message[BUFFER_SIZE];
+
+	while((recieve = recv(client_socket, client_message, sizeof(client_message), 0)) != -1){
+		client_message[recieve] = '\0';
+		if(strcmp(client_message, EXIT_CHAR) == 0){
+            printf("server: thank you for using echo server.\n");
+            exit(1);
+        }
+		if(send(client_socket, client_message, sizeof(client_message), 0) == -1){
+            printf("server: send failed.\n");
+            exit(1);
+        }
+	}
+    return NULL;
+}
+
+void *log_thread(void *args){
     FILE *n;
     n = fopen("log.txt", "a");
     if(n == NULL){
