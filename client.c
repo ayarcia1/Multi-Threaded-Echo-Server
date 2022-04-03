@@ -49,12 +49,11 @@ int main(int argc, char **argv){
             puts(server_message);
             exit(1);
         }
-        
-        else{
-            printf("client: reply received.\n");
-            sleep(1);
-            puts(server_message);
-        }
+
+        printf("client: reply received.\n");
+        sleep(1);
+        puts(server_message);
+        sleep(1);
     }
     return 0;
 }
