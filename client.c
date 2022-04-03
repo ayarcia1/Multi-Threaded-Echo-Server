@@ -45,9 +45,16 @@ int main(int argc, char **argv){
             exit(1);
         }
 
-        printf("client: reply received.\n");
-        sleep(1);
-        puts(server_message);
+        if(strcmp(server_message, "server: thank you for using echo server.\n") == 0){
+            puts(server_message);
+            exit(1);
+        }
+        
+        else{
+            printf("client: reply received.\n");
+            sleep(1);
+            puts(server_message);
+        }
     }
     return 0;
 }

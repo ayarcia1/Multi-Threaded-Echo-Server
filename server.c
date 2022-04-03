@@ -21,7 +21,7 @@ int main(int argc, char **argv){
     int server_socket, client_socket;
     int size = sizeof(struct sockaddr_in);
     struct sockaddr_in server, client;
-    pthread_t log, thread[NUM_WORKER];
+    pthread_t thread[NUM_WORKER];
 
     if(argc == 1){
         length = DEFAULT_LENGTH;
@@ -56,8 +56,6 @@ int main(int argc, char **argv){
         printf("server: error, too many parameters.\n");
         exit(1);
     }
-
-    pthread_create(&log, NULL, log_thread, NULL);
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket == -1){
@@ -113,26 +111,35 @@ void *worker_thread(void *args){
     int client_socket = *((int*)args);
     int recieve;
     char client_message[BUFFER_SIZE];
+    pthread_t log;
 
 	while((recieve = recv(client_socket, client_message, sizeof(client_message), 0)) != -1){
 		client_message[recieve] = '\0';
 		if(strcmp(client_message, EXIT_CHAR) == 0){
-            printf("server: thank you for using echo server.\n");
-            exit(1);
+            if(send(client_socket, "server: thank you for using echo server.", 100, 0) == -1){
+                exit(1);
+            }
         }
-		if(send(client_socket, client_message, sizeof(client_message), 0) == -1){
+		else if(send(client_socket, client_message, sizeof(client_message), 0) == -1){
             printf("server: send failed.\n");
             exit(1);
         }
+        pthread_create(&log, NULL, log_thread, &client_message);
 	}
     return NULL;
 }
 
 void *log_thread(void *args){
-    FILE *n;
-    n = fopen("log.txt", "a");
-    if(n == NULL){
+    char *client_message = args;
+    FILE *log;
+    
+    log = fopen("log.txt", "a");
+    if(log == NULL){
         printf("server: log file failed.\n");
     }
+
+    fprintf(log, "%s\n", client_message);
+
+    fclose(log);
     return NULL;
 }
