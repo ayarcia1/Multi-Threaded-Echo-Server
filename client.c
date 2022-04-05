@@ -41,7 +41,7 @@ int main(int argc, char **argv){
         sleep(1);
         
         if(recv(server_socket, server_message, sizeof(server_message), 0) == -1){
-            printf("client: recv failed.\n");
+            printf("client: recieve failed.\n");
             exit(1);
         }
 
