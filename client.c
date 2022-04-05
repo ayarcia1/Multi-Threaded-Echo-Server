@@ -31,7 +31,11 @@ int main(int argc, char **argv){
     
     while(1){
         printf("client: enter a message to server: ");
-        scanf("%s", client_message);
+        fgets(client_message, 1024, stdin);
+
+        if((strlen(client_message) > 0) && (client_message[strlen(client_message) - 1] == '\n')){
+            client_message[strlen(client_message) - 1] = '\0';
+        }
 
         if(send(server_socket, client_message, strlen(client_message), 0) == -1){
             printf("client: send failed.\n");
@@ -47,7 +51,7 @@ int main(int argc, char **argv){
 
         if(strcmp(server_message, "server: thank you for using echo server.\n") == 0){
             puts(server_message);
-            exit(1);
+            close(server_socket);
         }
 
         printf("client: reply received.\n");

@@ -9,77 +9,21 @@
 #include <netinet/in.h>
 #define DEFAULT_LENGTH 1024
 #define DEFAULT_PORT 8888
-#define BUFFER_SIZE 5
-#define NUM_WORKER 5
-#define EXIT_CHAR "exit"
 #define SA struct sockaddr
 void *main_thread(void *args);
 void *worker_thread(void *args);
 void *log_thread(void *args);
+void parse_cmdline(int argc, char **argv);
+int length, port, work, buf;
+char *term;
 pthread_mutex_t main_mutex, work_mutex, log_mutex;
 
 int main(int argc, char **argv){
-    int i, length, port, work, buf, server_socket;
-    char *term;
+    int server_socket;
     struct sockaddr_in server;
     pthread_t tid;
 
-    for(i=0; i<argc; i++){
-        if(strcmp(argv[i], "-p") == 0){
-            port = atoi(argv[i++]);
-            if(port < 1024 || port > 9999){
-                printf("server: insufficient port number.\n");
-                exit(1);
-            }
-        }
-        else{
-            port = DEFAULT_PORT;
-        }
-
-        if(strcmp(argv[i], "-l") == 0){
-            length = atoi(argv[i++]);
-            if(length < 128 || length > 2048){
-                printf("server: insufficient message length.\n");
-                exit(1);
-            }
-        }
-        else{
-            length = DEFAULT_LENGTH;
-        }
-
-        if(strcmp(argv[i], "-w") == 0){
-            work = atoi(argv[i++]);
-            if(work < 1 || port > 10){
-                printf("server: insufficient number of workers.\n");
-                exit(1);
-            }
-        }
-        else{
-            work = NUM_WORKER;
-        }
-
-        if(strcmp(argv[i], "-b") == 0){
-            buf = atoi(argv[i++]);
-            if(buf < 0 || buf > 10){
-                printf("server: insufficient buffer size.\n");
-                exit(1);
-            }
-        }
-        else{
-            buf = BUFFER_SIZE;
-        }
-
-        if(strcmp(argv[i], "-t") == 0){
-            term = argv[i++];
-            if(!term){
-                printf("server: insufficient terminator character.\n");
-                exit(1);
-            }
-        }
-        else{
-            term = EXIT_CHAR;
-        }
-    }
+    parse_cmdline(argc, argv);
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket == -1){
@@ -123,7 +67,8 @@ void *main_thread(void *args){
     int i, client_socket;
     struct sockaddr_in client;
     int size = sizeof(struct sockaddr_in);
-    pthread_t thread[NUM_WORKER];
+    pthread_t thread[work];
+
     pthread_mutex_init(&main_mutex, NULL);
 
     while(1){
@@ -136,7 +81,7 @@ void *main_thread(void *args){
         }
         printf("server: connection accepted.\n");
 
-        for(i=0; i<NUM_WORKER; i++){
+        for(i=0; i<work; i++){
             if(pthread_create(&thread[i], NULL, worker_thread, &client_socket) == -1){
                 printf("server: failed to open worker thread.\n");
                 exit(1);
@@ -153,7 +98,7 @@ void *main_thread(void *args){
 
 void *worker_thread(void *args){
     int client_socket = *((int*)args);
-    char client_message[DEFAULT_LENGTH];
+    char client_message[length];
     pthread_t log;
     pthread_mutex_init(&work_mutex, NULL);
     
@@ -165,9 +110,9 @@ void *worker_thread(void *args){
             exit(1);
         }
 
-		if(strcmp(client_message, EXIT_CHAR) == 0){
+		if(strcmp(client_message, term) == 0){
             if(send(client_socket, "server: thank you for using echo server.", 100, 0) == -1){
-                exit(1);
+                printf("server: send failed.\n");
             }
         }
 
@@ -205,4 +150,81 @@ void *log_thread(void *args){
     fclose(log);
     pthread_mutex_unlock(&log_mutex);
     return NULL;
+}
+
+void parse_cmdline(int argc, char **argv){
+    int i;
+    int p = 0, l = 0, w = 0, b = 0, t = 0;
+
+    for(i=0; i<argc; i++){
+        if(strcmp(argv[i], "-p") == 0){
+            port = atoi(argv[i+1]);
+            if(port < 1024 || port > 9999){
+                printf("server: insufficient port number.\n");
+                exit(1);
+            }
+            p++;
+        }
+
+        else if(strcmp(argv[i], "-l") == 0){
+            length = atoi(argv[i+1]);
+            if(length < 128 || length > 2048){
+                printf("server: insufficient message length.\n");
+                exit(1);
+            }
+            l++;
+        }
+
+        else if(strcmp(argv[i], "-w") == 0){
+            if(!argv[i+1]){
+                printf("server: please enter the number of workers.\n");
+                exit(1);
+            }
+            work = atoi(argv[i+1]);
+            if(work < 1 || work > 10){
+                printf("server: insufficient number of workers.\n");
+                exit(1);
+            }
+            w++;
+        }
+
+        else if(strcmp(argv[i], "-b") == 0){
+            if(!argv[i+1]){
+                printf("server: please enter a buffer size\n");
+                exit(1);
+            }
+            buf = atoi(argv[i+1]);
+            if(buf < 1 || buf > 10){
+                printf("server: insufficient buffer size.\n");
+                exit(1);
+            }
+            b++;
+        }
+
+        else if(strcmp(argv[i], "-t") == 0){
+            if(!argv[i+1]){
+                printf("server: please enter a terminator character.\n");
+                exit(1);
+            }
+            term = argv[i+1];
+            if(!term){
+                printf("server: insufficient terminator character.\n");
+                exit(1);
+            }
+            t++;
+        }
+    }
+
+    if(p == 0){
+        port = DEFAULT_PORT;
+    }
+
+    if(l == 0){
+        length = DEFAULT_LENGTH;
+    }
+
+    if(w == 0 || b == 0 || t == 0){
+        printf("server: number of workers, buffer size, or terminator character missing.\n");
+        exit(1);
+    }
 }
