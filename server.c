@@ -16,20 +16,37 @@ void *log_thread(void *args);
 void parse_cmdline(int argc, char **argv);
 int length, port, work, buf;
 char *term;
-pthread_mutex_t main_mutex, work_mutex, log_mutex;
+pthread_mutex_t mutex;
 
 int main(int argc, char **argv){
-    int server_socket;
-    struct sockaddr_in server;
     pthread_t tid;
     //parse the command line to extract command line values.
     parse_cmdline(argc, argv);
+
+    //open the main thread.
+    if(pthread_create(&tid, NULL, main_thread, NULL) == -1){
+        printf("server: failed to open main thread.\n");
+        exit(1);
+    }
+    //join the main thread.
+    if(pthread_join(tid, NULL) == -1){
+        printf("server: failed to join main thread.\n");
+        exit(1);
+    }
+    return 0;
+}
+
+void *main_thread(void *args){
+    int i, server_socket, client_socket;
+    struct sockaddr_in server, client;
+    int size = sizeof(struct sockaddr_in);
+    pthread_t thread[work];
     //setup the socket.
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket == -1){
         printf("server: could not create a socket.\n");
     }
-    printf("server: socket created\n");
+    printf("server: socket created.\n");
     sleep(1);
     //setup the server;
     server.sin_family = AF_INET;
@@ -44,34 +61,12 @@ int main(int argc, char **argv){
     sleep(1);
     //listen for client connections.
     if(listen(server_socket, 3) == -1){
-        printf("server: listen failed\n");
+        printf("server: listen failed.\n");
         exit(1);
     }
     printf("server: listening for connections...\n");
-    //open the main thread.
-    if(pthread_create(&tid, NULL, main_thread, &server_socket) == -1){
-        printf("server: failed to open main thread.\n");
-        exit(1);
-    }
-    //join the main thread.
-    if(pthread_join(tid, NULL) == -1){
-        printf("server: failed to join main thread.\n");
-        exit(1);
-    }
-    return 0;
-}
-
-void *main_thread(void *args){
-    int server_socket = *((int*)args);
-    int i, client_socket;
-    struct sockaddr_in client;
-    int size = sizeof(struct sockaddr_in);
-    pthread_t thread[work];
-    pthread_mutex_init(&main_mutex, NULL);
 
     while(1){
-        //lock the main thread.
-        pthread_mutex_lock(&main_mutex);
         //accept the client socket;
         client_socket = accept(server_socket, (SA*) &client, (socklen_t*) &size);
         if(client_socket == -1){
@@ -87,12 +82,10 @@ void *main_thread(void *args){
             }
             //detatch worker threads for concurrency.
             if(pthread_detach(thread[i]) == -1){
-                printf("server: failed to join worker thread.\n");
+                printf("server: failed to detatch worker thread.\n");
                 exit(1);
             }
         }
-        //unlock the main thread.
-        pthread_mutex_unlock(&main_mutex);
     }
 }
 
@@ -100,14 +93,14 @@ void *worker_thread(void *args){
     int client_socket = *((int*)args);
     char client_message[length];
     pthread_t log;
-    pthread_mutex_init(&work_mutex, NULL);
+    pthread_mutex_init(&mutex, NULL);
     
 	while(1){
         //lock the worker thread.
-        pthread_mutex_lock(&work_mutex);
+        pthread_mutex_lock(&mutex);
         //recieve message from client.
         if(recv(client_socket, client_message, sizeof(client_message), 0) == -1){
-            printf("server: recieve failed\n");
+            printf("server: recieve failed.\n");
             exit(1);
         }
         //check if message is the terminating character.
@@ -124,23 +117,18 @@ void *worker_thread(void *args){
         }
         //open the log thread.
         if(pthread_create(&log, NULL, log_thread, &client_message) == -1){
-            printf("server: failed to open log thread\n");
+            printf("server: failed to open log thread.\n");
             exit(1);
         }
         //unlock the worker thread.
-        pthread_mutex_unlock(&work_mutex);
+        pthread_mutex_unlock(&mutex);
 	}
 }
 
 void *log_thread(void *args){
     char *client_message = args;
-    time_t cal_time;
+    time_t cal_time = time(NULL);
     FILE *log;
-
-    cal_time = time(NULL);
-    pthread_mutex_init(&log_mutex, NULL);
-    //lock the log thread.
-    pthread_mutex_lock(&log_mutex);
     //open log file for storing log information.
     log = fopen("log.txt", "a");
     if(log == NULL){
@@ -148,9 +136,8 @@ void *log_thread(void *args){
     }
     //print the contents of the client message with respected calendar time to the log file.
     fprintf(log, "%s %s", client_message, asctime(localtime(&cal_time)));
-    //close the log and unlock the log thread.
+    //close the log file.
     fclose(log);
-    pthread_mutex_unlock(&log_mutex);
     return NULL;
 }
 
@@ -214,13 +201,13 @@ void parse_cmdline(int argc, char **argv){
         else if(strcmp(argv[i], "-b") == 0){
             //check is there is a value after flag.
             if(!argv[i+1]){
-                printf("server: please enter a buffer size\n");
+                printf("server: please enter a buffer size.\n");
                 exit(1);
             }
             //set the argument after flag to buf.
             buf = atoi(argv[i+1]);
             //check if the value is sufficient.
-            if(buf < 1 || buf > 10){
+            if(buf != argc-1){
                 printf("server: insufficient buffer size.\n");
                 exit(1);
             }
@@ -258,7 +245,10 @@ void parse_cmdline(int argc, char **argv){
     //if work, buf, or terminator is not given by user.
     if(w == 0 && b == 0 && t == 0){
         //print error message and exit.
-        printf("server: please enter the number of workers, buf, and terminator character\n");
-        exit(1);
+        //printf("server: please enter the number of workers, buf, and terminator character.\n");
+        //exit(1);
+        work = 2;
+        b = 5;
+        term = "exit";
     }
 }

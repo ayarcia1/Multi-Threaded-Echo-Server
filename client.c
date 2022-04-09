@@ -34,7 +34,7 @@ int main(int argc, char **argv){
     //if client takes more than two arguments.
     else if(argc > 3){
         //printf error message and exit.
-        printf("client: error too many arguments\n");
+        printf("client: error too many arguments.\n");
         exit(1);
     }
 
@@ -42,7 +42,7 @@ int main(int argc, char **argv){
     //setup the socket.
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket == -1){
-        printf("client: could not create a socket\n");
+        printf("client: could not create a socket.\n");
     }
     //setup the server.
     server.sin_family = AF_INET;
@@ -67,14 +67,14 @@ int main(int argc, char **argv){
         //send the message to the server.
         if(send(server_socket, client_message, strlen(client_message), 0) == -1){
             printf("client: send failed.\n");
-            exit(1);
+            break;
         }
         printf("client: data sent.\n");
         sleep(1);
         //recieve the message back from the server.
         if(recv(server_socket, server_message, sizeof(server_message), 0) == -1){
             printf("client: recieve failed.\n");
-            exit(1);
+            break;
         }
         //if the message was terminator character.
         if(strcmp(server_message, "server: thank you for using echo server.") == 0){
