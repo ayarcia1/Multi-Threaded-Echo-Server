@@ -30,7 +30,7 @@ int main(int argc, char **argv){
         printf("server: failed to open main thread.\n");
         exit(1);
     }
-    
+
     //join the main thread.
     if(pthread_join(tid, NULL) == -1){
         printf("server: failed to join main thread.\n");
@@ -101,25 +101,22 @@ void *main_thread(void *args){
                     exit(1);
                 }
             }
-            while(1){
-                //wait for a worker thread to exit.
-                while(i >= work){
-                    pthread_cond_wait(&wait, &mutex);
-                }
 
-                //create a new worker thread to replace the exit thread.
-                if(pthread_create(&thread[i++], NULL, worker_thread, &client_socket) == -1){
-                    printf("server: failed to open worker thread.\n");
-                    exit(1);
-                }
+            //wait for a worker thread to exit.
+            while(i >= work){
+                pthread_cond_wait(&wait, &mutex);
+            }
 
-                //join the new worker thread.
-                while(i<work){
-                    if(pthread_join(thread[i], NULL) == -1){
-                        printf("server: failed to join worker thread.\n");
-                        exit(1);
-                    }
-                }
+            //create a new worker thread to replace the exit thread.
+            if(pthread_create(&thread[i++], NULL, worker_thread, &client_socket) == -1){
+                printf("server: failed to open worker thread.\n");
+                exit(1);
+            }
+
+            //join the new worker thread.
+            if(pthread_join(thread[i++], NULL) == -1){
+                printf("server: failed to join worker thread.\n");
+                exit(1);
             }
         }
     }
@@ -143,7 +140,7 @@ void *worker_thread(void *args){
             if(send(client_socket, "server: thank you for using echo server.", 100, 0) == -1){
                 printf("server: send failed.\n");
             }
-
+            
             //close the client socket.
             close(client_socket);
             //add a worker to replace the exit thread and signal main thread.

@@ -53,6 +53,7 @@ int main(int argc, char **argv){
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_port = htons(port);
+    
     //connect the socket to the server.
     if(connect(server_socket, (SA*) &server, sizeof(server)) == -1){
         printf("client: connect failed.\n");
@@ -74,7 +75,7 @@ int main(int argc, char **argv){
         //send the message to the server.
         if(send(server_socket, client_message, strlen(client_message), 0) == -1){
             printf("client: send failed.\n");
-            break;
+            exit(1);
         }
         printf("client: data sent.\n");
         sleep(1);
@@ -82,7 +83,14 @@ int main(int argc, char **argv){
         //recieve the message back from the server.
         if(recv(server_socket, server_message, sizeof(server_message), 0) == -1){
             printf("client: recieve failed.\n");
-            break;
+            exit(1);
+        }
+
+        //if the client recieves an exit message from the server.
+        if(strcmp(server_message, "server: thank you for using echo server.") == 0){
+            //print exit message and exit.
+            puts(server_message);
+            exit(1);
         }
 
         //else print success message and print the server message.
@@ -90,9 +98,5 @@ int main(int argc, char **argv){
         sleep(1);
         puts(server_message);
         sleep(1);
-        
-        //flush out keyboard input.
-        fflush(stdin);
     }
-    return 0;
 }
