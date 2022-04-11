@@ -17,7 +17,7 @@ void parse_cmdline(int argc, char **argv);
 int length, port, work, buf;
 char *term;
 pthread_mutex_t mutex;
-pthread_cond_t wait;
+pthread_cond_t cond;
 
 int main(int argc, char **argv){
     pthread_t tid;
@@ -40,11 +40,12 @@ int main(int argc, char **argv){
 }
 
 void *main_thread(void *args){
-    int i, server_socket, client_socket;
+    int i, j, server_socket, client_socket;
     struct sockaddr_in server, client;
     int size = sizeof(struct sockaddr_in);
     pthread_t thread[work];
     pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&cond, NULL);
 
     //setup the socket.
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -75,8 +76,6 @@ void *main_thread(void *args){
     printf("server: listening for connections...\n");
 
     while(1){
-        //lock the main thread.
-        pthread_mutex_lock(&mutex);
         //accept the client socket;
         client_socket = accept(server_socket, (SA*) &client, (socklen_t*) &size);
         if(client_socket == -1){
@@ -84,7 +83,7 @@ void *main_thread(void *args){
             exit(1);
         }
         printf("server: connection accepted.\n");
-
+        
         //open all the worker threads.
         if(pthread_create(&thread[i++], NULL, worker_thread, &client_socket) == -1){
             printf("server: failed to open worker thread.\n");
@@ -101,78 +100,96 @@ void *main_thread(void *args){
                     exit(1);
                 }
             }
+            i--;
+
+            //lock the main thread.
+            pthread_mutex_lock(&mutex);
 
             //wait for a worker thread to exit.
             while(i >= work){
-                pthread_cond_wait(&wait, &mutex);
+                j++;
+                pthread_cond_wait(&cond, &mutex);
             }
 
-            //create a new worker thread to replace the exit thread.
-            if(pthread_create(&thread[i++], NULL, worker_thread, &client_socket) == -1){
-                printf("server: failed to open worker thread.\n");
-                exit(1);
-            }
+            //unlock the main thread.
+            pthread_mutex_unlock(&mutex);
+            
+            i++;
+            if(j > 0){
+                //create a new worker thread to replace the exit thread.
+                if(pthread_create(&thread[i], NULL, worker_thread, &client_socket) == -1){
+                    printf("server: failed to open worker thread.\n");
+                    exit(1);
+                }
 
-            //join the new worker thread.
-            if(pthread_join(thread[i++], NULL) == -1){
-                printf("server: failed to join worker thread.\n");
-                exit(1);
+                //join the new worker thread.
+                if(pthread_join(thread[i], NULL) == -1){
+                    printf("server: failed to join worker thread.\n");
+                    exit(1);
+                }
             }
         }
-        //unlock the main thread.
-        pthread_mutex_unlock(&mutex);
     }
+    //destroy the locks.
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&cond);
 }
 
 void *worker_thread(void *args){
     int client_socket = *((int*)args);
-    char client_message[length], buffer[sizeof(client_message)];
+    char client_message[length], log_message[length];
     pthread_t log;
     int size = strlen(term);
-    sprintf(buffer, "\r%100s", " ");
     pthread_mutex_init(&mutex, NULL);
+    pthread_cond_init(&cond, NULL);
 
     //while the server is recieving input from the client.
 	while(recv(client_socket, client_message, sizeof(client_message), 0) != -1){
-        //lock the worker thread.
-        pthread_mutex_lock(&mutex);
-
-        //check if message is the terminating character.
-		if(strncmp(client_message, term, size) == 0){
-            //send an exit message to client.
-            if(send(client_socket, "server: thank you for using echo server.", 100, 0) == -1){
-                printf("server: send failed.\n");
-                exit(1);
-            }
-            
-            //close the client socket.
-            close(client_socket);
-            //add a worker to replace the exit thread and signal main thread.
-            work++;
-            pthread_cond_signal(&wait);
-        }
-
         //send the message back to the client.
-		else if(strncmp(client_message, term, size) != 0){
+		if(strncmp(client_message, term, size) != 0){
             if(send(client_socket, client_message, sizeof(client_message), 0) == -1){
                 printf("server: send failed.\n");
                 exit(1);
             }
         }
 
+        //check if message is the terminating character.
+		else if(strncmp(client_message, term, size) == 0){
+            //send an exit message to client.
+            if(send(client_socket, "server: thank you for using echo server.", 100, 0) == -1){
+                printf("server: send failed.\n");
+                exit(1);
+            }
+            //close the client socket.
+            close(client_socket);
+
+            //lock the worker thread.
+            pthread_mutex_lock(&mutex);
+            
+            //add a worker to replace the exit thread and signal main thread.
+            work++;
+
+            //signal the main thread and unlock the worker thread.
+            pthread_cond_signal(&cond);
+            pthread_mutex_unlock(&mutex);
+        }
+
+        //copy the client message to the log message.
+        strcpy(log_message, client_message);
+
         //open the log thread.
-        if(pthread_create(&log, NULL, log_thread, &client_message) == -1){
+        if(pthread_create(&log, NULL, log_thread, &log_message) == -1){
             printf("server: failed to open log thread.\n");
             exit(1);
         }
-
-        //reset the buffer.
-        strcpy(client_message, buffer);
-        //unlock the worker thread.
-        pthread_mutex_unlock(&mutex);
+        //reset the client message.
+        bzero(client_message, length);
 	}
-    //if while loop breaks print error message and exit.
-    printf("server: recieve failed.\n");
+
+    //if while loop breaks print exit message and exit.
+    printf("server: client exited.\n");
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&cond);
     return NULL;
 }
 
@@ -316,10 +333,7 @@ void parse_cmdline(int argc, char **argv){
     //if work, buf, or terminator is not given by user.
     if(w == 0 && b == 0 && t == 0){
         //print error message and exit.
-        //printf("server: please enter the number of workers, buf, and terminator character.\n");
-        //exit(1);
-        work = 1;
-        buf = 3;
-        term = "exit";
+        printf("server: please enter the number of workers, buf, and terminator character.\n");
+        exit(1);
     }
 }
