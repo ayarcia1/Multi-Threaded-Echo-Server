@@ -87,7 +87,7 @@ int main(int argc, char **argv){
         }
 
         //if the client recieves an exit message from the server.
-        if(strcmp(server_message, "server: thank you for using echo server.") == 0){
+        if(strcmp(server_message, "server: ECHO SERVICE COMPLETE.") == 0){
             //print exit message and exit.
             puts(server_message);
             exit(1);
