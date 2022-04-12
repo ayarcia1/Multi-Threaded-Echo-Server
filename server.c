@@ -20,19 +20,19 @@ pthread_mutex_t mutex;
 pthread_cond_t cond;
 
 int main(int argc, char **argv){
-    pthread_t tid;
+    pthread_t main_tid;
 
     //parse the command line to extract command line values.
     parse_cmdline(argc, argv);
 
     //open the main thread.
-    if(pthread_create(&tid, NULL, main_thread, NULL) == -1){
+    if(pthread_create(&main_tid, NULL, main_thread, NULL) == -1){
         printf("server: failed to open main thread.\n");
         exit(1);
     }
 
     //join the main thread.
-    if(pthread_join(tid, NULL) == -1){
+    if(pthread_join(main_tid, NULL) == -1){
         printf("server: failed to join main thread.\n");
         exit(1);
     }
@@ -43,7 +43,7 @@ void *main_thread(void *args){
     int i, j, server_socket, client_socket;
     struct sockaddr_in server, client;
     int size = sizeof(struct sockaddr_in);
-    pthread_t wtid[work], tid;
+    pthread_t work_tid[work];
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
 
@@ -85,7 +85,7 @@ void *main_thread(void *args){
         printf("server: connection accepted.\n");
         
         //open all the worker threads.
-        if(pthread_create(&wtid[i++], NULL, worker_thread, &client_socket) == -1){
+        if(pthread_create(&work_tid[i++], NULL, worker_thread, &client_socket) == -1){
             printf("server: failed to open worker thread.\n");
             exit(1);
         }
@@ -95,37 +95,38 @@ void *main_thread(void *args){
             i = 0;
             while(i < work){
                 //join worker threads.
-                if(pthread_join(wtid[i++], NULL) == -1){
+                if(pthread_join(work_tid[i++], NULL) == -1){
                     printf("server: failed to join worker thread.\n");
                     exit(1);
                 }
             }
-            i = 0;
-        }
+            i--;
 
-        //lock the main thread.
-        pthread_mutex_lock(&mutex);
+            //lock the main thread.
+            pthread_mutex_lock(&mutex);
 
-        //wait for a worker thread to exit.
-        while(i >= buf){
-            j++;
-            pthread_cond_wait(&cond, &mutex);
-        }
-
-        //unlock the main thread.
-        pthread_mutex_unlock(&mutex);
-        
-        if(j > 0){
-            //create a new worker thread to replace the exit thread.
-            if(pthread_create(&tid, NULL, worker_thread, &client_socket) == -1){
-                printf("server: failed to open worker thread.\n");
-                exit(1);
+            //wait for a worker thread to exit.
+            while(i >= work){
+                j++;
+                pthread_cond_wait(&cond, &mutex);
             }
 
-            //join the new worker thread.
-            if(pthread_join(tid, NULL) == -1){
-                printf("server: failed to join worker thread.\n");
-                exit(1);
+            //unlock the main thread.
+            pthread_mutex_unlock(&mutex);
+            
+            i++;
+            if(j > 0){
+                //create a new worker thread to replace the exit thread.
+                if(pthread_create(&work_tid[i], NULL, worker_thread, &client_socket) == -1){
+                    printf("server: failed to open worker thread.\n");
+                    exit(1);
+                }
+
+                //join the new worker thread.
+                if(pthread_join(work_tid[i], NULL) == -1){
+                    printf("server: failed to join worker thread.\n");
+                    exit(1);
+                }
             }
         }
     }
@@ -137,7 +138,7 @@ void *main_thread(void *args){
 void *worker_thread(void *args){
     int client_socket = *((int*)args);
     char client_message[length], log_message[length];
-    pthread_t ltid;
+    pthread_t log_tid;
     int size = strlen(term);
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
@@ -166,7 +167,7 @@ void *worker_thread(void *args){
             pthread_mutex_lock(&mutex);
             
             //add a worker to replace the exit thread and signal main thread.
-            buf++;
+            work++;
 
             //signal the main thread and unlock the worker thread.
             pthread_cond_signal(&cond);
@@ -177,7 +178,7 @@ void *worker_thread(void *args){
         strcpy(log_message, client_message);
 
         //open the log thread.
-        if(pthread_create(&ltid, NULL, log_thread, &log_message) == -1){
+        if(pthread_create(&log_tid, NULL, log_thread, &log_message) == -1){
             printf("server: failed to open log thread.\n");
             exit(1);
         }
@@ -332,11 +333,7 @@ void parse_cmdline(int argc, char **argv){
     //if work, buf, or terminator is not given by user.
     if(w == 0 && b == 0 && t == 0){
         //print error message and exit.
-        //printf("server: please enter the number of workers, buf, and terminator character.\n");
-        //exit(1);
-
-        work = 1;
-        buf = 1;
-        term = "exit";
+        printf("server: please enter the number of workers, buf, and terminator character.\n");
+        exit(1);
     }
 }
