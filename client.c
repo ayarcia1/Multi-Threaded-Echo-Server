@@ -1,3 +1,7 @@
+//Name: Arif Ayarci
+//Project 3: Multi-Threaded Echo Server
+//Date: 4/13/2022
+//Section: CIS-3207-01
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,7 +71,7 @@ int main(int argc, char **argv){
         printf("client: enter a message to server: ");
         fgets(client_message, length, stdin);
 
-        //account for spaces in message.
+        //account for spaces in the message.
         if((strlen(client_message) > 0) && (client_message[strlen(client_message) - 1] == '\n')){
             client_message[strlen(client_message) - 1] = '\0';
         }

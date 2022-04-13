@@ -1,3 +1,7 @@
+//Name: Arif Ayarci
+//Project 3: Multi-Threaded Echo Server
+//Date: 4/13/2022
+//Section: CIS-3207-01
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,10 +26,10 @@ pthread_cond_t cond;
 int main(int argc, char **argv){
     pthread_t main_tid;
 
-    //parse the command line to extract command line values.
+    //parse the command line to extract control parameters.
     parse_cmdline(argc, argv);
 
-    //open the main thread.
+    //create the main thread.
     if(pthread_create(&main_tid, NULL, main_thread, NULL) == -1){
         printf("server: failed to open main thread.\n");
         exit(1);
@@ -40,9 +44,8 @@ int main(int argc, char **argv){
 }
 
 void *main_thread(void *args){
-    int i, j, server_socket, client_socket;
+    int i, j, server_socket, client_socket, size = sizeof(struct sockaddr_in);
     struct sockaddr_in server, client;
-    int size = sizeof(struct sockaddr_in);
     pthread_t work_tid[work];
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
@@ -80,7 +83,7 @@ void *main_thread(void *args){
         client_socket = accept(server_socket, (SA*) &client, (socklen_t*) &size);
         if(client_socket == -1){
             printf("server: accept failed.\n");
-            exit(1);
+            close(client_socket);
         }
         printf("server: connection accepted.\n");
         
@@ -113,7 +116,7 @@ void *main_thread(void *args){
 
             //unlock the main thread.
             pthread_mutex_unlock(&mutex);
-            
+
             i++;
             if(j > 0){
                 //create a new worker thread to replace the exit thread.
@@ -136,10 +139,9 @@ void *main_thread(void *args){
 }
 
 void *worker_thread(void *args){
-    int client_socket = *((int*)args);
+    int client_socket = *((int*)args), size = strlen(term);
     char client_message[length], log_message[length];
     pthread_t log_tid;
-    int size = strlen(term);
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
 
@@ -186,7 +188,7 @@ void *worker_thread(void *args){
         bzero(client_message, length);
 	}
 
-    //if while loop breaks print exit message and exit.
+    //if the client exits print client exit message and exit.
     printf("server: client exited.\n");
     pthread_mutex_destroy(&mutex);
     pthread_cond_destroy(&cond);
@@ -206,7 +208,7 @@ void *log_thread(void *args){
     //print the contents of the client message with respected calendar time to the log file.
     fprintf(log, "%s %s", log_message, asctime(localtime(&cal_time)));
 
-    //close the log file.
+    //close the log file and exit.
     fclose(log);
     return NULL;
 }
@@ -221,7 +223,7 @@ void parse_cmdline(int argc, char **argv){
         if(strcmp(argv[i], "-l") == 0){
             //check is there is a value after flag.
             if(!argv[i+1]){
-                printf("server: please enter the number of workers.\n");
+                printf("server: please enter the message length.\n");
                 exit(1);
             }
 
@@ -241,7 +243,7 @@ void parse_cmdline(int argc, char **argv){
         else if(strcmp(argv[i], "-p") == 0){
             //check is there is a value after flag.
             if(!argv[i+1]){
-                printf("server: please enter the number of workers.\n");
+                printf("server: please enter the port number.\n");
                 exit(1);
             }
 
@@ -269,7 +271,7 @@ void parse_cmdline(int argc, char **argv){
             work = atoi(argv[i+1]);
 
             //check if the value is sufficient.
-            if(work < 1 || work > 10){
+            if(work < 1 || work > 100){
                 printf("server: insufficient number of workers.\n");
                 exit(1);
             }
@@ -289,7 +291,7 @@ void parse_cmdline(int argc, char **argv){
             buf = atoi(argv[i+1]);
 
             //check if the value is sufficient.
-            if(buf < 1 || buf > 10){
+            if(buf < 1 || buf > 100){
                 printf("server: insufficient buffer size.\n");
                 exit(1);
             }
@@ -331,9 +333,9 @@ void parse_cmdline(int argc, char **argv){
     }
 
     //if work, buf, or terminator is not given by user.
-    if(w == 0 && b == 0 && t == 0){
+    if(w == 0 || b == 0 || t == 0){
         //print error message and exit.
-        printf("server: please enter the number of workers, buf, and terminator character.\n");
+        printf("server: enter workers (-w), buf (-b), and terminator (-t).\n");
         exit(1);
     }
 }
