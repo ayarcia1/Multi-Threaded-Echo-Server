@@ -47,6 +47,7 @@ void *main_thread(void *args){
     int i, j, server_socket, client_socket, size = sizeof(struct sockaddr_in);
     struct sockaddr_in server, client;
     pthread_t work_tid[work];
+    //initialize the lock and condition variable.
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
 
@@ -142,6 +143,7 @@ void *worker_thread(void *args){
     int client_socket = *((int*)args), size = strlen(term);
     char client_message[length], log_message[length];
     pthread_t log_tid;
+    //initialize the lock and condition variable.
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
 
@@ -184,12 +186,13 @@ void *worker_thread(void *args){
             printf("server: failed to open log thread.\n");
             exit(1);
         }
-        //reset the client message.
+        //reset the client message memory.
         bzero(client_message, length);
 	}
 
-    //if the client exits print client exit message and exit.
+    //if client exits, print client exit message.
     printf("server: client exited.\n");
+    //destroy the locks and exit.
     pthread_mutex_destroy(&mutex);
     pthread_cond_destroy(&cond);
     return NULL;
@@ -335,7 +338,7 @@ void parse_cmdline(int argc, char **argv){
     //if work, buf, or terminator is not given by user.
     if(w == 0 || b == 0 || t == 0){
         //print error message and exit.
-        printf("server: enter workers (-w), buf (-b), and terminator (-t).\n");
+        printf("server: enter the workers (-w), buffer (-b), and terminator (-t).\n");
         exit(1);
     }
 }
